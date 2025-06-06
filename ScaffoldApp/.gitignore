@@ -1,0 +1,14 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+# Rider IDE files
+.idea/
+*.idea
+*.iml
+*.sln.iml
+modules.xml
+*.dotCover
+*.user
+*.userprefs
