@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ScaffoldApp.Models;
 
 namespace ScaffoldApp.DbConfigurations;
 
@@ -8,11 +9,18 @@ public class AppDbContext : DbContext
     {
     }
     // Adicione seus DbSets aqui
-    // public DbSet<Produto> Produtos { get; set; }
+    public DbSet<LogEntry> LogEntries { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        //Configurações de modelo
+        modelBuilder.Entity<LogEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Level).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Message).IsRequired();
+            entity.Property(e => e.Details).HasMaxLength(2000);
+        });
+
         base.OnModelCreating(modelBuilder);
     }
 }

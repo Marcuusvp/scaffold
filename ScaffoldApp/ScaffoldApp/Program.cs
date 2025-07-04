@@ -1,12 +1,41 @@
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using ScaffoldApp.DbConfigurations;
-using ScaffoldApp.Shared.Logging;
 using Serilog;
+using Serilog.Sinks.OpenTelemetry;
 
+DotNetEnv.Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddSerilogLogging(builder.Configuration);
+var otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")!;
+var otlpHeaders  = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_HEADERS")!;
+var otlpProto = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_PROTOCOL")!;
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)  // console/elastic etc.
+    .WriteTo.Console()
+    .WriteTo.Elasticsearch(/* sua config */)
+    .WriteTo.OpenTelemetry(o =>
+    {
+        o.Endpoint = otlpEndpoint;
+        o.Headers  = otlpHeaders
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(parts => parts[0], parts => parts[1]);
+        o.Protocol = otlpProto.Equals("grpc", StringComparison.OrdinalIgnoreCase)
+            ? OtlpProtocol.Grpc
+            : OtlpProtocol.HttpProtobuf;
+
+        // opcional: atribue resource attrs, se quiser
+        var rawAttrs = builder.Configuration["OpenTelemetry:ResourceAttributes"]!;
+        o.ResourceAttributes = rawAttrs
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(parts => parts[0], parts => (object)parts[1]);
+    })
+    .CreateLogger();
 builder.Host.UseSerilog();
 
 builder.Services.AddControllers();
@@ -16,6 +45,42 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options => 
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgresConnection")));
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r
+        .AddService("scaffoldApp.Api", serviceNamespace: "my-application-group")
+        .AddAttributes(new Dictionary<string, object>
+        {
+            ["deployment.environment"] = "production"
+        })
+    )
+    .WithTracing(tr =>
+    {
+        tr.AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddEntityFrameworkCoreInstrumentation()
+            .AddOtlpExporter(to =>
+            {
+                to.Endpoint = new Uri(otlpEndpoint);
+                to.Headers  = otlpHeaders;
+                to.Protocol = otlpProto.Equals("grpc", StringComparison.OrdinalIgnoreCase)
+                    ? OtlpExportProtocol.Grpc
+                    : OtlpExportProtocol.HttpProtobuf;
+            });
+    })
+    .WithMetrics(mt =>
+    {
+        mt.AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddOtlpExporter(mo =>
+            {
+                mo.Endpoint = new Uri(otlpEndpoint);
+                mo.Headers  = otlpHeaders;
+                mo.Protocol = otlpProto.Equals("grpc", StringComparison.OrdinalIgnoreCase)
+                    ? OtlpExportProtocol.Grpc
+                    : OtlpExportProtocol.HttpProtobuf;
+            });
+    });
 
 
 var app = builder.Build();
