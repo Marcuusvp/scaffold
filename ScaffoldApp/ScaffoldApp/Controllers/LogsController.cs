@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using ScaffoldApp.DbConfigurations;
 using ScaffoldApp.Models;
@@ -8,11 +9,13 @@ namespace ScaffoldApp.Controllers;
 [Route("api/[controller]")]
 public class LogsController : ControllerBase
 {
+    private static readonly ActivitySource MySource = new ActivitySource("scaffoldApp.Api.Manual");
     private readonly AppDbContext _context;
-    
-    public LogsController(AppDbContext context)
+    private readonly ILogger<LogsController> _log;
+    public LogsController(AppDbContext context, ILogger<LogsController> log)
     {
         _context = context;
+        _log = log;
     }
     [HttpPost]
     public async Task<ActionResult<LogEntry>> PostLog([FromBody] LogEntry logEntry)
@@ -35,5 +38,18 @@ public class LogsController : ControllerBase
     {
         log.LogInformation("Teste de log em /ping");
         return Ok("pong");
+    }
+    
+    [HttpGet("trace")]
+    public IActionResult Trace()
+    {
+        using var activity = MySource.StartActivity("ManualOperation");
+        _log.LogInformation("Iniciando operação manual…");
+
+        // aqui seu código “pesado”
+        Thread.Sleep(200);
+
+        _log.LogInformation("Operação manual concluída.");
+        return Ok("traced");
     }
 }

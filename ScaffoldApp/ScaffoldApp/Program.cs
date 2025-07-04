@@ -59,27 +59,14 @@ builder.Services.AddOpenTelemetry()
         tr.AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation()
-            .AddOtlpExporter(to =>
-            {
-                to.Endpoint = new Uri(otlpEndpoint);
-                to.Headers  = otlpHeaders;
-                to.Protocol = otlpProto.Equals("grpc", StringComparison.OrdinalIgnoreCase)
-                    ? OtlpExportProtocol.Grpc
-                    : OtlpExportProtocol.HttpProtobuf;
-            });
+            .AddSource("scaffoldApp.Api.Manual") 
+            .AddOtlpExporter();
     })
     .WithMetrics(mt =>
     {
         mt.AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
-            .AddOtlpExporter(mo =>
-            {
-                mo.Endpoint = new Uri(otlpEndpoint);
-                mo.Headers  = otlpHeaders;
-                mo.Protocol = otlpProto.Equals("grpc", StringComparison.OrdinalIgnoreCase)
-                    ? OtlpExportProtocol.Grpc
-                    : OtlpExportProtocol.HttpProtobuf;
-            });
+            .AddOtlpExporter();
     });
 
 
